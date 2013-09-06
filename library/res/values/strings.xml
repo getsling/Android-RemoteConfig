@@ -1,5 +1,7 @@
 <resources>
 
     <string name="app_name">RemoteConfig</string>
+    <string name="rc_config_location">http://static.radio.com/mobile/radiocom.json</string>
+    <integer name="rc_config_update_interval">86400000</integer>
     
 </resources>
