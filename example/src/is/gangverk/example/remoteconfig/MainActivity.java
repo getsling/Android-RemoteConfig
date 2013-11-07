@@ -25,7 +25,13 @@ public class MainActivity extends Activity implements RemoteConfigListener {
         String remoteJsonArray = RemoteConfig.getInstance().getString("remoteArray");
         
         try {
-			mStatus.setText(String.format("Remote string:%s \nRemote int:%d \nRemote deep string:%s \nRemote json array:%s",remoteString, remoteInt, remoteDeepString, new JSONArray(remoteJsonArray).toString()));
+        	// Just to show that the jsonArray is valid, I cast the string to a JSONArray object and back
+			mStatus.setText(String.format("" +
+					"Remote string: %s \n" +
+					"Remote int: %d \n" +
+					"Remote deep string: %s \n" +
+					"Remote json array: %s"
+					,remoteString, remoteInt, remoteDeepString, new JSONArray(remoteJsonArray).toString()));
 		} catch (JSONException e) {
 			e.printStackTrace();
 		}

@@ -1,0 +1,13 @@
+{
+  "remoteString": "NEW: This is remote",
+  "remoteInt": 35,
+  "remoteArray": [
+    "NEW: remoteArray1",
+    "NEW: remoteArray2",
+    "NEW: remoteArray3"
+  ],
+  "remoteObject": {
+    "remoteObject0": "NEW: string_0",
+    "remoteObject1": 1
+  }
+}
