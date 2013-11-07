@@ -32,8 +32,8 @@ public class RemoteConfig {
 	private long mUpdateTime;
 	private SharedPreferences mPreferences;
 	private Context mContext;
-	private RemoteConfigListener mListener  = null; 
-
+	private ArrayList<RemoteConfigListener> mListeners;
+	
 	public RemoteConfig() {}
 
 	private volatile static RemoteConfig instance;
@@ -141,8 +141,10 @@ public class RemoteConfig {
 		//Let someone know we have a new value
 		for (int i = 0; i < changedKeys.size(); i++) {
 			Log.d(TAG, String.format(Locale.getDefault(), "Changed remote config value: %s", changedKeys.get(i)));
-			if(mListener!=null) {
-				mListener.onDownloadComplete(changedKeys.get(i));
+			if(mListeners!=null && mListeners.size()>0) {
+				for(RemoteConfigListener listener : mListeners) {
+					listener.onDownloadComplete(changedKeys.get(i));	
+				}
 			}
 		}
 	}
@@ -242,9 +244,15 @@ public class RemoteConfig {
 		return allKeys;
 	}
 
-	// Allows the user to set an Listener and react to the event
-	public void setRemoteConfigListener(RemoteConfigListener listener) {
-		mListener = listener;
+	/**
+	 * Adds a listener to the remote config that can react to new values being downloaded
+	 * 
+	 * @param listener The listener to listen for new config values
+	 */
+	public void addRemoteConfigListener(RemoteConfigListener listener) {
+		if(mListeners==null)
+			mListeners = new ArrayList<RemoteConfig.RemoteConfigListener>();
+		mListeners.add(listener);
 	}
 
 	private class FetchConfigAsyncTask extends AsyncTask<Void, Void, JSONObject> {
