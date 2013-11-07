@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">example</string>
+
+    <!-- Remote config -->
+    <string name="rc_config_location">http://static.radio.com/mobile/radiocom.json</string>
+    <integer name="rc_config_update_interval">86400000</integer> <!-- Update interval in milliseconds -->
+
+</resources>

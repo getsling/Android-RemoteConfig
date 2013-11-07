@@ -1,4 +1,4 @@
-package com.gangverk.remoteconfig;
+package is.gangverk.remoteconfig;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -18,9 +18,8 @@ import android.content.SharedPreferences.Editor;
 import android.os.AsyncTask;
 import android.util.Log;
 
-import com.gangverk.remoteconfig.R;
 public class RemoteConfig {
-	public static final String LAST_DOWNLOADED_CONFIG_KEY = "lastDownloadedConfig";
+	private static final String LAST_DOWNLOADED_CONFIG_KEY = "lastDownloadedConfig";
 	private static final String TAG = "RemoteConfig";
 	private static final String PREFERENCE_NAME = "RemoteConfig";
 	// This is just a dot, since we have regular expression we have to have the backslashes as well
@@ -37,10 +36,26 @@ public class RemoteConfig {
 
 	public RemoteConfig() {}
 
+	private volatile static RemoteConfig instance;
+
+	/**
+	 *  Returns singleton class instance 
+	 */
+	public static RemoteConfig getInstance() {
+		if (instance == null) {
+			synchronized (RemoteConfig.class) {
+				if (instance == null) {
+					instance = new RemoteConfig();
+				}
+			}
+		}
+		return instance;
+	}
+	
 	public synchronized void init(Context context, int version) {
 		mContext = context;
-		mConfigLocation = mContext.getString(R.string.rc_config_location);
-		mUpdateTime = mContext.getResources().getInteger(R.integer.rc_config_update_interval);
+		mConfigLocation = mContext.getString(mContext.getResources().getIdentifier("rc_config_location", "string", mContext.getPackageName()));
+		mUpdateTime = mContext.getResources().getInteger(mContext.getResources().getIdentifier("rc_config_update_interval", "integer", mContext.getPackageName()));		
 		mPreferences = mContext.getSharedPreferences(PREFERENCE_NAME, Context.MODE_PRIVATE);
 		int oldVersion = mPreferences.getInt(SP_VERSION_KEY, -1);
 		if(!mPreferences.getBoolean(REMOTE_CONFIG_INITIALIZER, false) || version>oldVersion) {
@@ -236,7 +251,7 @@ public class RemoteConfig {
 
 		@Override
 		protected JSONObject doInBackground(Void... params) {
-			return JSONMethods.readJSONFeed(mConfigLocation, null);
+			return Utils.readJSONFeed(mConfigLocation, null);
 		}
 
 		@Override
