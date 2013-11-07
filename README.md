@@ -9,7 +9,7 @@ Download the jar file and put it into your libs folder. [`Remote Config v1`](htt
 There are three steps to follow when using RemoteConfig
 
 ### Step 1 : Add permission to your manifest file
-Add the INTERNET permission to your manifest file. Inside the <manifest> tag add <uses-permission android:name="android.permission.INTERNET" />
+Add the INTERNET permission to your manifest file. Inside the manifest tag add `<uses-permission android:name="android.permission.INTERNET" />`
 
 ### Step 2 : Add configure strings to your strings.xml file
 You must add the strings "rc_config_location" and "rc_config_update_interval" into your strings file. These are the url to your config file and the update interval of your preferences in milliseconds respectively.
