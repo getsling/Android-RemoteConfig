@@ -64,7 +64,7 @@ public class Utils {
 		Utils.setHttpTimeoutParams(httpClient);
 		try {
 			HttpRequestBase httpRequest = new HttpGet();
-			httpRequest.addHeader("Content-Type", "application/json");
+			httpRequest.addHeader("Accept", "application/json");
 			if(headers != null) {
 				for(int i = 0; i<headers.size() ;i++) {
 					httpRequest.addHeader(headers.get(i).first, headers.get(i).second);
