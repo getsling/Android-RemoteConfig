@@ -12,10 +12,12 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.util.Log;
 
 public class RemoteConfig {
@@ -32,8 +34,8 @@ public class RemoteConfig {
 	private long mUpdateTime;
 	private SharedPreferences mPreferences;
 	private Context mContext;
-	private RemoteConfigListener mListener  = null; 
-
+	private ArrayList<RemoteConfigListener> mListeners;
+	
 	public RemoteConfig() {}
 
 	private volatile static RemoteConfig instance;
@@ -52,6 +54,7 @@ public class RemoteConfig {
 		return instance;
 	}
 	
+	@SuppressLint("NewApi")
 	public synchronized void init(Context context, int version) {
 		mContext = context;
 		mConfigLocation = mContext.getString(mContext.getResources().getIdentifier("rc_config_location", "string", mContext.getPackageName()));
@@ -60,10 +63,15 @@ public class RemoteConfig {
 		int oldVersion = mPreferences.getInt(SP_VERSION_KEY, -1);
 		if(!mPreferences.getBoolean(REMOTE_CONFIG_INITIALIZER, false) || version>oldVersion) {
 			initializeConfigFile();
-			mPreferences.edit().putInt(SP_VERSION_KEY, version).apply();
+			if(Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD) {
+				mPreferences.edit().putInt(SP_VERSION_KEY, version).apply();
+			} else {
+				mPreferences.edit().putInt(SP_VERSION_KEY, version).commit();
+			}
 		}
 	}
-
+	
+	@SuppressLint("NewApi")
 	private void initializeConfigFile() {
 		// Start with parsing the assets/rc.json file into JSONObject
 		JSONObject remoteConfig = initialFileToJsonObject();
@@ -74,10 +82,15 @@ public class RemoteConfig {
 		}
 		Editor editor = mPreferences.edit();
 		editor.putBoolean(REMOTE_CONFIG_INITIALIZER, true);
-		editor.apply();
+		if(Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD) {
+			editor.apply();
+		} else {
+			editor.commit();
+		}
 		checkForUpdate(); // We'll fetch new config on launch
 	}
 
+	@SuppressLint("NewApi")
 	private synchronized void jsonObjectIntoPreferences(final JSONObject jsonObject, boolean initial) {
 		Editor editor = mPreferences.edit();
 		ArrayList<String> changedKeys = new ArrayList<String>();
@@ -137,12 +150,18 @@ public class RemoteConfig {
 				e.printStackTrace();
 			}
 		}
-		editor.apply();
+		if(Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD) {
+			editor.apply();
+		} else {
+			editor.commit();
+		}
 		//Let someone know we have a new value
 		for (int i = 0; i < changedKeys.size(); i++) {
 			Log.d(TAG, String.format(Locale.getDefault(), "Changed remote config value: %s", changedKeys.get(i)));
-			if(mListener!=null) {
-				mListener.onDownloadComplete(changedKeys.get(i));
+			if(mListeners!=null && mListeners.size()>0) {
+				for(RemoteConfigListener listener : mListeners) {
+					listener.onDownloadComplete(changedKeys.get(i));	
+				}
 			}
 		}
 	}
@@ -197,12 +216,17 @@ public class RemoteConfig {
 		return mPreferences.getInt(mapping, -1);
 	}
 
+	@SuppressLint("NewApi")
 	private synchronized static boolean shouldUpdate(SharedPreferences preferences, long updateTime) {
 		long lastDownloadedConfig = preferences.getLong(RemoteConfig.LAST_DOWNLOADED_CONFIG_KEY, 0);
 		if(lastDownloadedConfig + updateTime < System.currentTimeMillis()) {
 			Editor editor = preferences.edit();
 			editor.putLong(RemoteConfig.LAST_DOWNLOADED_CONFIG_KEY, System.currentTimeMillis());
-			editor.apply();
+			if(Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD) {
+				editor.apply();
+			} else {
+				editor.commit();
+			}
 			return true;
 		}
 		return false;
@@ -242,9 +266,15 @@ public class RemoteConfig {
 		return allKeys;
 	}
 
-	// Allows the user to set an Listener and react to the event
-	public void setRemoteConfigListener(RemoteConfigListener listener) {
-		mListener = listener;
+	/**
+	 * Adds a listener to the remote config that can react to new values being downloaded
+	 * 
+	 * @param listener The listener to listen for new config values
+	 */
+	public void addRemoteConfigListener(RemoteConfigListener listener) {
+		if(mListeners==null)
+			mListeners = new ArrayList<RemoteConfig.RemoteConfigListener>();
+		mListeners.add(listener);
 	}
 
 	private class FetchConfigAsyncTask extends AsyncTask<Void, Void, JSONObject> {

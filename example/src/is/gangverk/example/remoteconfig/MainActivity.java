@@ -18,7 +18,7 @@ public class MainActivity extends Activity implements RemoteConfigListener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mStatus = (TextView) findViewById(R.id.textview_status);
-        RemoteConfig.getInstance().setRemoteConfigListener(this);
+        RemoteConfig.getInstance().addRemoteConfigListener(this);
         String remoteString = RemoteConfig.getInstance().getString("remoteString");
         int remoteInt = RemoteConfig.getInstance().getInt("remoteInt");
         String remoteDeepString = RemoteConfig.getInstance().getString("remoteObject.remoteObject0");
