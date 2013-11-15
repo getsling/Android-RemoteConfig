@@ -16,6 +16,8 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.util.Log;
@@ -35,7 +37,7 @@ public class RemoteConfig {
 	private SharedPreferences mPreferences;
 	private Context mContext;
 	private ArrayList<RemoteConfigListener> mListeners;
-	
+
 	public RemoteConfig() {}
 
 	private volatile static RemoteConfig instance;
@@ -53,7 +55,7 @@ public class RemoteConfig {
 		}
 		return instance;
 	}
-	
+
 	@SuppressLint("NewApi")
 	public synchronized void init(Context context, int version) {
 		mContext = context;
@@ -70,7 +72,7 @@ public class RemoteConfig {
 			}
 		}
 	}
-	
+
 	@SuppressLint("NewApi")
 	private void initializeConfigFile() {
 		// Start with parsing the assets/rc.json file into JSONObject
@@ -192,7 +194,7 @@ public class RemoteConfig {
 	}
 
 	public void checkForUpdate() {
-		if(RemoteConfig.shouldUpdate(mPreferences, mUpdateTime)) {
+		if(isNetworkConnection(mContext) && RemoteConfig.shouldUpdate(mPreferences, mUpdateTime)) {
 			// Fetch the config
 			new FetchConfigAsyncTask().execute();
 		}
@@ -230,6 +232,17 @@ public class RemoteConfig {
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Checks if there is wifi or mobile connection available 
+	 * @param context The application context
+	 * @return true if there is network connection available
+	 */
+	public static boolean isNetworkConnection(Context context) {
+		ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+		NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+		return activeNetwork != null && activeNetwork.isConnected();
 	}
 
 	public interface RemoteConfigListener {
