@@ -1,6 +1,9 @@
 package is.gangverk.remoteconfig;
 
 import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -101,9 +104,17 @@ public class RemoteConfig {
 			throw new RuntimeException("Unable to parse config URL");
 		}
 		mConfigLocation = locationUrl;
+		mPreferences = mContext.getSharedPreferences(getConfigName(), Context.MODE_PRIVATE);
+	}
+
+	private String getConfigName() {
+		String configName = null;
 		try {
-			mPreferences = mContext.getSharedPreferences(URLEncoder.encode(locationUrl.toString(), "UTF-8"), Context.MODE_PRIVATE);
-		} catch (UnsupportedEncodingException e) {}
+			configName = URLEncoder.encode(mConfigLocation.toString(), "UTF-8");
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		return configName;
 	}
 
 	public void setConfig(String location) {
@@ -111,6 +122,28 @@ public class RemoteConfig {
 		checkForUpdate(true);
 	}
 
+	public JSONObject getConfig() {
+		JSONObject config = null;
+		
+		try {
+			FileInputStream fis = mContext.openFileInput(getConfigName());
+			InputStreamReader isr = new InputStreamReader(fis);
+			BufferedReader bufferedReader = new BufferedReader(isr);
+			StringBuilder sb = new StringBuilder();
+			String line;
+			while ((line = bufferedReader.readLine()) != null) {
+				sb.append(line);
+			}
+			config = new JSONObject(sb.toString());
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+		return config;
+	}
 	@SuppressLint("NewApi")
 	private void initializeConfigFile() {
 		// Start with parsing the assets/rc.json file into JSONObject
@@ -365,14 +398,38 @@ public class RemoteConfig {
 	}
 	private class FetchConfigAsyncTask extends AsyncTask<Void, Void, JSONObject> {
 		private boolean mInitial;
-		
+
 		public FetchConfigAsyncTask(boolean initial) {
 			mInitial = initial;
 		}
-		
+
 		@Override
 		protected JSONObject doInBackground(Void... params) {
-			return Utils.readJSONFeed(mConfigLocation.toString(), null);
+			String jsonFeed = Utils.readJSONFeedString(mConfigLocation.toString(), null);
+
+			String filename = getConfigName();
+			FileOutputStream outputStream = null;
+			try {
+				outputStream = mContext.openFileOutput(filename, Context.MODE_PRIVATE);
+				outputStream.write(jsonFeed.getBytes());
+			} catch (IOException e) {
+				e.printStackTrace();
+			} finally {
+				if(outputStream!=null)
+					try {
+						outputStream.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+			}
+
+			JSONObject json = null;
+			try {
+				json = new JSONObject(jsonFeed);
+			} catch (JSONException e) {
+				e.printStackTrace();
+			}
+			return json;
 		}
 
 		@Override
