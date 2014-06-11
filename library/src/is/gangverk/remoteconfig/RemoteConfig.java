@@ -4,9 +4,13 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Locale;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -20,19 +24,16 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Build;
-import android.util.Log;
 
 public class RemoteConfig {
 	private static final String LAST_DOWNLOADED_CONFIG_KEY = "lastDownloadedConfig";
-	private static final String TAG = "RemoteConfig";
-	private static final String PREFERENCE_NAME = "RemoteConfig";
 	// This is just a dot, since we have regular expression we have to have the backslashes as well
 	private static final String DEEP_DICTIONARY_SEPARATOR_REGEX = "\\."; 
 	private static final String DEEP_DICTIONARY_SEPARATOR = "."; 
 	private static final String REMOTE_CONFIG_INITIALIZER = "sp_has_initialized_rc"; 
 	private static final String REMOTE_CONFIG_FILE = "rc.json";
 	private static final String SP_VERSION_KEY = "rc_version";
-	private String mConfigLocation;
+	private URL mConfigLocation;
 	private long mUpdateTime;
 	private SharedPreferences mPreferences;
 	private Context mContext;
@@ -56,21 +57,58 @@ public class RemoteConfig {
 		return instance;
 	}
 
+	/**
+	 * Use this method to initialize the remote config. Using this init method you would have to have the 
+	 * string named rc_config_location with the config url as value somewhere in your xml files.
+	 * 
+	 * @param context Can be application context
+	 * @param version For version control. If this isn't increased with new key/value pairs won't ever be added
+	 */
+	public synchronized void init(Context context, int version, boolean useDefault) {
+		init(context, version, useDefault, context.getString(context.getResources().getIdentifier("rc_config_location", "string", context.getPackageName())));
+	}
+
+	/**
+	 * Use this method to initialize the remote config with a custom config location.
+	 * 
+	 * @param context Can be application context
+	 * @param version For version control. If this isn't increased with new key/value pairs won't ever be added
+	 * @param useDefault If true then use the assets/rc.json file as default values
+	 * @param location The location of the remote config
+	 */
 	@SuppressLint("NewApi")
-	public synchronized void init(Context context, int version) {
+	public synchronized void init(Context context, int version, boolean useDefault, String location) {
 		mContext = context;
-		mConfigLocation = mContext.getString(mContext.getResources().getIdentifier("rc_config_location", "string", mContext.getPackageName()));
-		mUpdateTime = mContext.getResources().getInteger(mContext.getResources().getIdentifier("rc_config_update_interval", "integer", mContext.getPackageName()));		
-		mPreferences = mContext.getSharedPreferences(PREFERENCE_NAME, Context.MODE_PRIVATE);
+		setConfigImpl(location);
+		mUpdateTime = context.getResources().getInteger(context.getResources().getIdentifier("rc_config_update_interval", "integer", context.getPackageName()));		
 		int oldVersion = mPreferences.getInt(SP_VERSION_KEY, -1);
 		if(!mPreferences.getBoolean(REMOTE_CONFIG_INITIALIZER, false) || version>oldVersion) {
-			initializeConfigFile();
+			if(useDefault) initializeConfigFile();
+			checkForUpdate(); // We'll fetch new config on launch
 			if(Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD) {
 				mPreferences.edit().putInt(SP_VERSION_KEY, version).apply();
 			} else {
 				mPreferences.edit().putInt(SP_VERSION_KEY, version).commit();
 			}
 		}
+	}
+
+	private void setConfigImpl(String location) {
+		URL locationUrl;
+		try {
+			locationUrl = new URL(location);
+		} catch (MalformedURLException e) {
+			throw new RuntimeException("Unable to parse config URL");
+		}
+		mConfigLocation = locationUrl;
+		try {
+			mPreferences = mContext.getSharedPreferences(URLEncoder.encode(locationUrl.toString(), "UTF-8"), Context.MODE_PRIVATE);
+		} catch (UnsupportedEncodingException e) {}
+	}
+
+	public void setConfig(String location) {
+		setConfigImpl(location);
+		checkForUpdate(true);
 	}
 
 	@SuppressLint("NewApi")
@@ -89,13 +127,13 @@ public class RemoteConfig {
 		} else {
 			editor.commit();
 		}
-		checkForUpdate(); // We'll fetch new config on launch
 	}
 
 	@SuppressLint("NewApi")
 	private synchronized void jsonObjectIntoPreferences(final JSONObject jsonObject, boolean initial) {
 		Editor editor = mPreferences.edit();
-		ArrayList<String> changedKeys = new ArrayList<String>();
+		if(initial) editor.clear(); // initial can also be thought of as force, delete all old values
+		HashMap<String, Object> changedKeys = new HashMap<String, Object>();
 		ArrayList<String> allKeys = getAllKeysFromJSONObject(jsonObject, null);
 		for(String newKey : allKeys) {
 
@@ -126,7 +164,7 @@ public class RemoteConfig {
 					String newValue = ((JSONArray)value).toString();
 					if(!newValue.equals(oldValue)){
 						editor.putString(newKey,newValue);
-						changedKeys.add(newKey);
+						changedKeys.put(newKey, newValue);
 					}
 				} else if(value instanceof String) {
 					String oldValue = mPreferences.getString(newKey, null);
@@ -135,7 +173,7 @@ public class RemoteConfig {
 					String newValue = (String)value;
 					if(!newValue.equals(oldValue)){
 						editor.putString(newKey,newValue);
-						changedKeys.add(newKey);
+						changedKeys.put(newKey, newValue);
 					}
 
 				} else if(value instanceof Integer) {
@@ -145,7 +183,7 @@ public class RemoteConfig {
 					int newValue = ((Integer)value).intValue();
 					if(newValue != oldValue){
 						editor.putInt(newKey,newValue);
-						changedKeys.add(newKey);
+						changedKeys.put(newKey, newValue);
 					}
 				}
 			} catch (JSONException e) {
@@ -158,12 +196,14 @@ public class RemoteConfig {
 			editor.commit();
 		}
 		//Let someone know we have a new value
-		for (int i = 0; i < changedKeys.size(); i++) {
-			Log.d(TAG, String.format(Locale.getDefault(), "Changed remote config value: %s", changedKeys.get(i)));
-			if(mListeners!=null && mListeners.size()>0) {
-				for(RemoteConfigListener listener : mListeners) {
-					listener.onDownloadComplete(changedKeys.get(i));	
+		Iterator<String> it = changedKeys.keySet().iterator();
+		if(mListeners!=null && mListeners.size()>0) {
+			for(RemoteConfigListener listener : mListeners) {
+				while (it.hasNext()) {
+					String key = it.next();
+					listener.onValueUpdated(key, changedKeys.get(key));					
 				}
+				listener.onConfigComplete();
 			}
 		}
 	}
@@ -194,12 +234,22 @@ public class RemoteConfig {
 	}
 
 	public void checkForUpdate() {
-		if(isNetworkConnection(mContext) && RemoteConfig.shouldUpdate(mPreferences, mUpdateTime)) {
-			// Fetch the config
-			new FetchConfigAsyncTask().execute();
-		}
+		checkForUpdate(false);
 	}
 
+	/**
+	 * Checks if it is time for update based on the updateTime variable.
+	 * 
+	 * @param force Forces the update even though it isn't time to update. Also owerwrites all the values even though they are unchanged.
+	 */
+	private void checkForUpdate(boolean force) {
+		if(RemoteConfig.shouldUpdate(mPreferences, mUpdateTime) || force) {
+			if(isNetworkConnection(mContext)) {
+				// Fetch the config
+				new FetchConfigAsyncTask(force).execute();
+			}
+		}
+	}
 	/**
 	 * Takes in the map parameter and returns the mapping if available. If the mapping is not available it 
 	 * returns the default value. If the user has never used this before or there has been a long time since 
@@ -247,11 +297,24 @@ public class RemoteConfig {
 
 	public interface RemoteConfigListener {
 		/**
-		 * This method is called when the config has been downloaded and it's values put into shared preferences
+		 * This method is called when the config has been downloaded and it's values are being put into shared preferences
 		 * 
 		 * @param key The key for the new value in shared preferences
+		 * @param value The updated value
 		 */
-		public void onDownloadComplete(String map);
+		public void onValueUpdated(String key, Object value);
+
+		/**
+		 * This is called after every new value has been put into shared preferences 
+		 */
+		public void onConfigComplete();
+
+		/**
+		 * In case of error, this is called
+		 * 
+		 * @param string The error message 
+		 */
+		public void onConfigError(String string);
 	}
 
 	private ArrayList<String> getAllKeysFromJSONObject(JSONObject jsonObject, String prefix) {
@@ -290,19 +353,38 @@ public class RemoteConfig {
 		mListeners.add(listener);
 	}
 
+	/**
+	 * Removes a listener
+	 * 
+	 * @param listener The listener to remove
+	 */
+	public void removeRemoteConfigListener(RemoteConfigListener listener) {
+		if(mListeners!=null) {
+			mListeners.remove(listener);
+		}
+	}
 	private class FetchConfigAsyncTask extends AsyncTask<Void, Void, JSONObject> {
-
+		private boolean mInitial;
+		
+		public FetchConfigAsyncTask(boolean initial) {
+			mInitial = initial;
+		}
+		
 		@Override
 		protected JSONObject doInBackground(Void... params) {
-			return Utils.readJSONFeed(mConfigLocation, null);
+			return Utils.readJSONFeed(mConfigLocation.toString(), null);
 		}
 
 		@Override
 		protected void onPostExecute(JSONObject config) {
 			if(config!=null) {
-				jsonObjectIntoPreferences(config, false);
+				jsonObjectIntoPreferences(config, mInitial);
 			} else {
-				Log.e(TAG, "Unable to read remote config");
+				if(mListeners!=null) {
+					for (int i = 0; i < mListeners.size(); i++) {
+						mListeners.get(i).onConfigError("Unable to read remote config");
+					}
+				}
 			}
 		}
 	}
