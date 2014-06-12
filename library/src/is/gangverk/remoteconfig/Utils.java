@@ -41,11 +41,25 @@ import org.apache.http.protocol.HTTP;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Build;
 import android.util.Pair;
 
 public class Utils {
 
+	/**
+	 * Checks if there is wifi or mobile connection available 
+	 * @param context The application context
+	 * @return true if there is network connection available
+	 */
+	public static boolean isNetworkConnection(Context context) {
+		ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+		NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+		return activeNetwork != null && activeNetwork.isConnected();
+	}
+	
 	/**
 	 * Reads a stream and writes it into a string. Closes inputStream when done.
 	 * @param inputStream The stream to read
