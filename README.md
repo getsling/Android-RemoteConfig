@@ -3,7 +3,7 @@
 Android library for loading a remote JSON config file with locally defined default values into the shared preferences.
 
 ## Installation
-Download the jar file and put it into your libs folder. [`Remote Config v1`](https://github.com/gangverk/Android-RemoteConfig/releases/download/1.0/remoteConfig_v1.jar) .
+Download the jar file and put it into your libs folder. [`Remote Config v1`](https://github.com/gangverk/Android-RemoteConfig/releases/download/1.1/remote-config-1.1.jar) .
 
 ## Implementation
 There are three steps to follow when using RemoteConfig
