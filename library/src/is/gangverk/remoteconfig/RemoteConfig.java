@@ -1,9 +1,6 @@
 package is.gangverk.remoteconfig;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -20,13 +17,15 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Build;
+import android.support.v4.content.LocalBroadcastManager;
 
 public class RemoteConfig {
 	private static final String LAST_DOWNLOADED_CONFIG_KEY = "lastDownloadedConfig";
@@ -36,6 +35,8 @@ public class RemoteConfig {
 	private static final String REMOTE_CONFIG_INITIALIZER = "sp_has_initialized_rc"; 
 	private static final String REMOTE_CONFIG_FILE = "rc.json";
 	private static final String SP_VERSION_KEY = "rc_version";
+	private static final String LOCAL_BROADCAST_INTENT = "remote_config_download_complete";
+	private static final String COMPLETE_CONFIG_KEY = "rc_complete_config";
 	private URL mConfigLocation;
 	private long mUpdateTime;
 	private SharedPreferences mPreferences;
@@ -87,13 +88,13 @@ public class RemoteConfig {
 		int oldVersion = mPreferences.getInt(SP_VERSION_KEY, -1);
 		if(!mPreferences.getBoolean(REMOTE_CONFIG_INITIALIZER, false) || version>oldVersion) {
 			if(useDefault) initializeConfigFile();
-			checkForUpdate(); // We'll fetch new config on launch
 			if(Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD) {
 				mPreferences.edit().putInt(SP_VERSION_KEY, version).apply();
 			} else {
 				mPreferences.edit().putInt(SP_VERSION_KEY, version).commit();
 			}
 		}
+		checkForUpdate(); // We'll fetch new config on launch
 	}
 
 	private void setConfigImpl(String location) {
@@ -104,17 +105,11 @@ public class RemoteConfig {
 			throw new RuntimeException("Unable to parse config URL");
 		}
 		mConfigLocation = locationUrl;
-		mPreferences = mContext.getSharedPreferences(getConfigName(), Context.MODE_PRIVATE);
-	}
-
-	private String getConfigName() {
-		String configName = null;
 		try {
-			configName = URLEncoder.encode(mConfigLocation.toString(), "UTF-8");
+			mPreferences = mContext.getSharedPreferences(URLEncoder.encode(mConfigLocation.toString(), "UTF-8"), Context.MODE_PRIVATE);
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		}
-		return configName;
 	}
 
 	public void setConfig(String location) {
@@ -123,27 +118,16 @@ public class RemoteConfig {
 	}
 
 	public JSONObject getConfig() {
-		JSONObject config = null;
-		
+		String completeConfig = getString(COMPLETE_CONFIG_KEY);
+		JSONObject completeJSON = null;
 		try {
-			FileInputStream fis = mContext.openFileInput(getConfigName());
-			InputStreamReader isr = new InputStreamReader(fis);
-			BufferedReader bufferedReader = new BufferedReader(isr);
-			StringBuilder sb = new StringBuilder();
-			String line;
-			while ((line = bufferedReader.readLine()) != null) {
-				sb.append(line);
-			}
-			config = new JSONObject(sb.toString());
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
+			completeJSON = new JSONObject(completeConfig);
 		} catch (JSONException e) {
 			e.printStackTrace();
 		}
-		return config;
+		return completeJSON;
 	}
+	
 	@SuppressLint("NewApi")
 	private void initializeConfigFile() {
 		// Start with parsing the assets/rc.json file into JSONObject
@@ -166,6 +150,7 @@ public class RemoteConfig {
 	private synchronized void jsonObjectIntoPreferences(final JSONObject jsonObject, boolean initial) {
 		Editor editor = mPreferences.edit();
 		if(initial) editor.clear(); // initial can also be thought of as force, delete all old values
+		editor.putString(COMPLETE_CONFIG_KEY, jsonObject.toString());		
 		HashMap<String, Object> changedKeys = new HashMap<String, Object>();
 		ArrayList<String> allKeys = getAllKeysFromJSONObject(jsonObject, null);
 		for(String newKey : allKeys) {
@@ -239,8 +224,13 @@ public class RemoteConfig {
 				listener.onConfigComplete();
 			}
 		}
+		LocalBroadcastManager.getInstance(mContext).sendBroadcast(new Intent(LOCAL_BROADCAST_INTENT));
 	}
 
+	public void registerForBroadcast(Context context, BroadcastReceiver receiver) {
+		LocalBroadcastManager.getInstance(context).registerReceiver(receiver, new IntentFilter(LOCAL_BROADCAST_INTENT));
+	}
+	
 	private JSONObject initialFileToJsonObject() {
 		JSONObject remoteConfig = null;
 		InputStream is = null;
@@ -277,7 +267,7 @@ public class RemoteConfig {
 	 */
 	private void checkForUpdate(boolean force) {
 		if(RemoteConfig.shouldUpdate(mPreferences, mUpdateTime) || force) {
-			if(isNetworkConnection(mContext)) {
+			if(Utils.isNetworkConnection(mContext)) {
 				// Fetch the config
 				new FetchConfigAsyncTask(force).execute();
 			}
@@ -315,17 +305,6 @@ public class RemoteConfig {
 			return true;
 		}
 		return false;
-	}
-
-	/**
-	 * Checks if there is wifi or mobile connection available 
-	 * @param context The application context
-	 * @return true if there is network connection available
-	 */
-	public static boolean isNetworkConnection(Context context) {
-		ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-		NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
-		return activeNetwork != null && activeNetwork.isConnected();
 	}
 
 	public interface RemoteConfigListener {
@@ -405,31 +384,7 @@ public class RemoteConfig {
 
 		@Override
 		protected JSONObject doInBackground(Void... params) {
-			String jsonFeed = Utils.readJSONFeedString(mConfigLocation.toString(), null);
-
-			String filename = getConfigName();
-			FileOutputStream outputStream = null;
-			try {
-				outputStream = mContext.openFileOutput(filename, Context.MODE_PRIVATE);
-				outputStream.write(jsonFeed.getBytes());
-			} catch (IOException e) {
-				e.printStackTrace();
-			} finally {
-				if(outputStream!=null)
-					try {
-						outputStream.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-			}
-
-			JSONObject json = null;
-			try {
-				json = new JSONObject(jsonFeed);
-			} catch (JSONException e) {
-				e.printStackTrace();
-			}
-			return json;
+			return Utils.readJSONFeed(mConfigLocation.toString(), null);
 		}
 
 		@Override
