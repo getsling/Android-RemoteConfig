@@ -31,7 +31,6 @@ public class RemoteConfig {
     // This is just a dot, since we have regular expression we have to have the backslashes as well
     private static final String DEEP_DICTIONARY_SEPARATOR_REGEX = "\\.";
     private static final String DEEP_DICTIONARY_SEPARATOR = ".";
-    private static final String REMOTE_CONFIG_INITIALIZER = "sp_has_initialized_rc";
     private static final String REMOTE_CONFIG_FILE = "rc.json";
     private static final String SP_VERSION_KEY = "rc_version";
     private static final String LOCAL_BROADCAST_INTENT = "remote_config_download_complete";
@@ -41,6 +40,7 @@ public class RemoteConfig {
     private SharedPreferences mPreferences;
     private Context mContext;
     private ArrayList<RemoteConfigListener> mListeners;
+    private int mVersion;
 
     public RemoteConfig() {}
 
@@ -82,17 +82,15 @@ public class RemoteConfig {
     @SuppressLint({"CommitPrefEdits"})
     public synchronized void init(Context context, int version, boolean useDefault, String location) {
         mContext = context;
+        mVersion = version;
         setConfigImpl(location);
         mUpdateTime = context.getResources().getInteger(context.getResources().getIdentifier("rc_config_update_interval", "integer", context.getPackageName()));
         int oldVersion = mPreferences.getInt(SP_VERSION_KEY, -1);
-        if(!mPreferences.getBoolean(REMOTE_CONFIG_INITIALIZER, false) || version>oldVersion) {
+        if(version>oldVersion) {
             mPreferences.edit().clear().apply();
             if(useDefault) {
                 initializeConfigFile();
             }
-            Editor editor = mPreferences.edit();
-            editor.putInt(SP_VERSION_KEY, version);
-            editor.apply();
         }
         checkForUpdate(); // We'll fetch new config on launch
     }
@@ -149,7 +147,7 @@ public class RemoteConfig {
     @SuppressLint("CommitPrefEdits")
     private synchronized void jsonObjectIntoPreferences(final JSONObject jsonObject) {
         Editor editor = mPreferences.edit();
-        editor.putBoolean(REMOTE_CONFIG_INITIALIZER, true);
+        editor.putInt(SP_VERSION_KEY, mVersion);
         editor.putString(COMPLETE_CONFIG_KEY, jsonObject.toString());
         HashMap<String, Object> changedKeys = new HashMap<String, Object>();
         ArrayList<String> allKeys = getAllKeysFromJSONObject(jsonObject, null);
