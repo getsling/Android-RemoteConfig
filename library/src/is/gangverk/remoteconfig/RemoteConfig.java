@@ -63,7 +63,7 @@ public class RemoteConfig {
     /**
      * Use this method to initialize the remote config. Using this init method you would have to have the
      * string named rc_config_location with the config url as value somewhere in your xml files.
-     * 
+     *
      * @param context Can be application context
      * @param version For version control. If this isn't increased with new key/value pairs won't ever be added
      */
@@ -73,7 +73,7 @@ public class RemoteConfig {
 
     /**
      * Use this method to initialize the remote config with a custom config location.
-     * 
+     *
      * @param context Can be application context
      * @param version For version control. If this isn't increased with new key/value pairs won't ever be added
      * @param useDefault If true then use the assets/rc.json file as default values
@@ -249,11 +249,9 @@ public class RemoteConfig {
      */
     public boolean checkForUpdate() {
         if(RemoteConfig.shouldUpdate(mPreferences, mUpdateTime)) {
-            if(Utils.isNetworkConnection(mContext)) {
-                // Fetch the config
-                new FetchConfigAsyncTask().execute();
-                return true;
-            }
+            // Fetch the config
+            new FetchConfigAsyncTask().execute();
+            return true;
         }
         return false;
     }
@@ -263,7 +261,7 @@ public class RemoteConfig {
      * Takes in the map parameter and returns the mapping if available. If the mapping is not available it
      * returns the default value. If the user has never used this before or there has been a long time since
      * last check for updated config, new config will be downloaded.
-     * 
+     *
      * @param mapping The map parameter to fetch something that should be in the remote config
      * @return Returns the mapping for the parameter from the shared defaults
      */
@@ -292,7 +290,7 @@ public class RemoteConfig {
     public interface RemoteConfigListener {
         /**
          * This method is called when the config has been downloaded and it's values are being put into shared preferences
-         * 
+         *
          * @param key The key for the new value in shared preferences
          * @param value The updated value
          */
@@ -305,7 +303,7 @@ public class RemoteConfig {
 
         /**
          * In case of error, this is called
-         * 
+         *
          * @param string The error message
          */
         public void onConfigError(String string);
@@ -338,7 +336,7 @@ public class RemoteConfig {
 
     /**
      * Adds a listener to the remote config that can react to new values being downloaded
-     * 
+     *
      * @param listener The listener to listen for new config values
      */
     public void addRemoteConfigListener(RemoteConfigListener listener) {
@@ -349,7 +347,7 @@ public class RemoteConfig {
 
     /**
      * Removes a listener
-     * 
+     *
      * @param listener The listener to remove
      */
     public void removeRemoteConfigListener(RemoteConfigListener listener) {
