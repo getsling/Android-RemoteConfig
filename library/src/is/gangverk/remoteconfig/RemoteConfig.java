@@ -137,6 +137,9 @@ public class RemoteConfig {
         String completeConfig = getString(COMPLETE_CONFIG_KEY);
         JSONObject completeJSON = null;
         try {
+            if(completeConfig==null) {
+                return null;
+            }
             completeJSON = new JSONObject(completeConfig);
         } catch (JSONException e) {
             e.printStackTrace();
@@ -278,13 +281,7 @@ public class RemoteConfig {
     @SuppressLint("NewApi")
     private synchronized static boolean shouldUpdate(SharedPreferences preferences, long updateTime) {
         long lastDownloadedConfig = preferences.getLong(RemoteConfig.LAST_DOWNLOADED_CONFIG_KEY, 0);
-        if(lastDownloadedConfig + updateTime < System.currentTimeMillis()) {
-            Editor editor = preferences.edit();
-            editor.putLong(RemoteConfig.LAST_DOWNLOADED_CONFIG_KEY, System.currentTimeMillis());
-            editor.apply();
-            return true;
-        }
-        return false;
+        return (lastDownloadedConfig + updateTime < System.currentTimeMillis());
     }
 
     public interface RemoteConfigListener {
@@ -366,6 +363,9 @@ public class RemoteConfig {
         @Override
         protected void onPostExecute(JSONObject config) {
             if(config!=null) {
+                Editor editor = mPreferences.edit();
+                editor.putLong(RemoteConfig.LAST_DOWNLOADED_CONFIG_KEY, System.currentTimeMillis());
+                editor.apply();
                 jsonObjectIntoPreferences(config);
             } else {
                 if(mListeners!=null) {
